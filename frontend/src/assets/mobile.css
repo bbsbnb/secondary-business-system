@@ -1,0 +1,23 @@
+"""
+移动端适配组件 - CSS Mixin
+"""
+.mobile-responsive {
+  /* 移动端基础样式 */
+  padding: 16px;
+}
+
+/* 小屏幕适配 */
+@media (max-width: 768px) {
+  .mobile-responsive {
+    padding: 12px;
+  }
+  
+  .mobile-responsive .el-table {
+    font-size: 14px;
+  }
+  
+  .mobile-responsive .el-card__header {
+    flex-direction: column;
+    gap: 8px;
+  }
+}
