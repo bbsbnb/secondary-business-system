@@ -33,6 +33,16 @@ def create_application() -> FastAPI:
     # 注册路由
     app.include_router(api_router, prefix=settings.API_V1_STR)
 
+    # 新增首页根路由，解决访问域名Not Found
+    @app.get("/")
+    async def index():
+        return {
+            "msg": "天行建筑智能管理平台服务正常运行",
+            "health_url": "/health",
+            "api_prefix": settings.API_V1_STR,
+            "docs": "/docs" if settings.DEBUG else "文档已关闭"
+        }
+
     # 健康检查
     @app.get("/health")
     async def health_check():
@@ -45,4 +55,5 @@ app = create_application()
 
 if __name__ == "__main__":
     import uvicorn
+    # 本地调试保留8000不影响，Docker启动必须改端口为10000
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
