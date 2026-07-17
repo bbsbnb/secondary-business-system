@@ -14,18 +14,11 @@ router = APIRouter()
 
 @router.get("/", response_model=List[ProjectResponse])
 async def list_projects(
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     status_filter: str = "active"
 ):
     """获取当前用户参与的项目列表"""
-    user_projects = db.query(ProjectMember).filter(
-        ProjectMember.user_id == current_user.id
-    ).all()
-    
-    project_ids = [pm.project_id for pm in user_projects]
     projects = db.query(Project).filter(
-        Project.id.in_(project_ids),
         Project.status == status_filter
     ).order_by(Project.created_at.desc()).all()
     
@@ -101,6 +94,29 @@ async def add_member(
     db.add(member)
     db.commit()
     return {"message": f"用户{user.real_name}已添加到项目"}
+
+
+@router.delete("/{project_id}", status_code=204)
+async def archive_project(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Archive a project without deleting related workflow data."""
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="项目不存在")
+
+    membership = db.query(ProjectMember).filter(
+        ProjectMember.project_id == project_id,
+        ProjectMember.user_id == current_user.id
+    ).first()
+    if not membership:
+        raise HTTPException(status_code=403, detail="无权操作此项目")
+
+    project.status = "archived"
+    db.commit()
+    return None
 
 
 @router.get("/{project_id}/members", response_model=List[dict])

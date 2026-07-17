@@ -3,6 +3,7 @@
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from datetime import datetime
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models import User, Project, BaselineData
@@ -77,7 +78,7 @@ async def lock_baseline(
         raise HTTPException(status_code=404, detail="基线数据不存在")
     
     baseline.locked = True
-    baseline.locked_at = db.func.now()
+    baseline.locked_at = datetime.utcnow()
     db.commit()
     db.refresh(baseline)
     return BaselineResponse.model_validate(baseline)
@@ -100,7 +101,7 @@ async def unlock_baseline(
     baseline.locked = False
     baseline.unlocked_reason = req.reason
     baseline.unlocked_by = req.approver_id
-    baseline.unlocked_at = db.func.now()
+    baseline.unlocked_at = datetime.utcnow()
     db.commit()
     db.refresh(baseline)
     return BaselineResponse.model_validate(baseline)

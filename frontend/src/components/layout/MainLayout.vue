@@ -156,6 +156,8 @@ function handleLogout() {
   background-color: #304156;
   transition: width 0.3s;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .logo {
@@ -172,6 +174,22 @@ function handleLogout() {
 
 .el-menu {
   border-right: none;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.el-menu::-webkit-scrollbar {
+  width: 6px;
+}
+
+.el-menu::-webkit-scrollbar-thumb {
+  background: #5b6f86;
+  border-radius: 4px;
+}
+
+.el-menu::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .header {

@@ -6,9 +6,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.v1.api import api_router
 from app.core.database import engine, Base
+from app.core.seed import seed_initial_data
 
 
 def create_application() -> FastAPI:
+    Base.metadata.create_all(bind=engine)
+    seed_initial_data()
+
     app = FastAPI(
         title="天行建筑智能管理平台",
         description="建筑施工企业月度经营全流程管理系统",

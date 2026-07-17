@@ -48,6 +48,7 @@ async def list_alerts(
             "alert_type": a.alert_type,
             "severity": a.severity,
             "message": a.message,
+            "escalated": a.escalated,
             "resolved": a.resolved,
             "related_id": a.related_id,
             "created_at": a.created_at.isoformat(),
@@ -94,7 +95,6 @@ async def get_alert_stats(
 @router.post("/{alert_id}/resolve")
 async def resolve_alert(
     alert_id: int,
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """标记预警为已解决"""
@@ -104,7 +104,6 @@ async def resolve_alert(
     
     alert.resolved = True
     alert.resolved_at = datetime.utcnow()
-    alert.resolved_by = current_user.id
     db.commit()
     
     return {"message": "预警已标记为已解决"}
@@ -132,7 +131,6 @@ async def mark_all_read(
 @router.post("/create-manual", status_code=201)
 async def create_manual_alert(
     req: dict,
-    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """手动创建预警"""

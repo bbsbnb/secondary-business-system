@@ -4,6 +4,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from decimal import Decimal
+from datetime import datetime, timedelta
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models import User
@@ -11,6 +12,29 @@ from app.models import ConstructionContract, Project, BaselineData
 from app.schemas import ConstructionContractResponse, ConstructionContractUpdate
 
 router = APIRouter()
+
+
+def recalculate_contract(contract: ConstructionContract) -> None:
+    revenue = (
+        (contract.original_contract_amount or Decimal('0'))
+        + (contract.visa_amount or Decimal('0'))
+        + (contract.claim_amount or Decimal('0'))
+        + (contract.change_amount or Decimal('0'))
+    )
+    cost = (
+        (contract.verified_amount or Decimal('0'))
+        + (contract.consumption_amount or Decimal('0'))
+        + (contract.material_settlement or Decimal('0'))
+        + (contract.cost_adjustment_summary or Decimal('0'))
+    )
+    profit = revenue - cost
+    ratio = float(profit / revenue * 100) if revenue > 0 else 0
+
+    contract.total_revenue = revenue
+    contract.total_cost = cost
+    contract.profit_amount = profit
+    contract.profit_ratio = round(ratio, 2)
+    contract.over_budget = cost > revenue if revenue > 0 else False
 
 
 @router.get("/{project_id}/{month}", response_model=ConstructionContractResponse)
@@ -58,19 +82,13 @@ async def create_or_update_contract(
         db.add(contract)
     
     # 计算利润
-    revenue = contract.total_revenue or Decimal('0')
-    cost = contract.total_cost or Decimal('0')
-    profit = revenue - cost
-    ratio = float(profit / revenue * 100) if revenue and revenue > 0 else 0
-    
-    contract.profit_amount = profit
-    contract.profit_ratio = round(ratio, 2)
+    was_over_budget = bool(contract.over_budget)
+    recalculate_contract(contract)
     
     # 超概检测
-    if revenue > 0 and cost > revenue:
-        if not contract.over_budget:
-            contract.over_budget = True
-            contract.over_budget_deadline = db.func.now() + __import__('datetime').timedelta(days=3)
+    if contract.over_budget:
+        if not was_over_budget:
+            contract.over_budget_deadline = datetime.utcnow() + timedelta(days=3)
     
     db.commit()
     db.refresh(contract)
@@ -96,6 +114,10 @@ async def update_contract(
     for field, value in req.model_dump().items():
         if value is not None:
             setattr(contract, field, value)
+    was_over_budget = bool(contract.over_budget)
+    recalculate_contract(contract)
+    if contract.over_budget and not was_over_budget:
+        contract.over_budget_deadline = datetime.utcnow() + timedelta(days=3)
     
     db.commit()
     db.refresh(contract)

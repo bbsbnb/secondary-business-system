@@ -1,66 +1,94 @@
 <template>
   <div class="pending-view">
-    <el-card>
+    <div class="summary-grid">
+      <el-card shadow="never">
+        <div class="summary-label">待办审批</div>
+        <div class="summary-value">{{ approvals.length }}</div>
+      </el-card>
+      <el-card shadow="never">
+        <div class="summary-label">涉及节点</div>
+        <div class="summary-value">{{ nodeCount }}</div>
+      </el-card>
+      <el-card shadow="never">
+        <div class="summary-label">今日新增</div>
+        <div class="summary-value">{{ todayCount }}</div>
+      </el-card>
+    </div>
+
+    <el-card shadow="never" class="table-card">
       <template #header>
         <div class="card-header">
           <span>我的待办审批</span>
           <el-button type="primary" @click="refresh">
-            <el-icon><Refresh /></el-icon> 刷新
+            <el-icon><Refresh /></el-icon>
+            刷新
           </el-button>
         </div>
       </template>
 
-      <el-table :data="approvals" v-loading="loading" style="width: 100%">
-        <el-table-column prop="node_type" label="节点" width="80">
+      <div class="toolbar">
+        <el-select v-model="filters.nodeType" clearable placeholder="全部节点" style="width: 160px">
+          <el-option v-for="node in nodeOptions" :key="node" :label="node" :value="node" />
+        </el-select>
+        <el-input
+          v-model="filters.keyword"
+          clearable
+          placeholder="搜索节点、版本、步骤"
+          style="width: 260px"
+        />
+      </div>
+
+      <el-table :data="filteredApprovals" v-loading="loading" style="width: 100%">
+        <el-table-column prop="node_type" label="节点" width="100">
           <template #default="{ row }">
             <el-tag size="small">{{ row.node_type }}</el-tag>
           </template>
         </el-table-column>
-        
-        <el-table-column prop="version" label="版本" width="70" />
-        
-        <el-table-column label="当前步骤" min-width="200">
+
+        <el-table-column prop="version" label="版本" width="90">
+          <template #default="{ row }">V{{ row.version }}</template>
+        </el-table-column>
+
+        <el-table-column label="当前步骤" min-width="220">
           <template #default="{ row }">
-            <div v-for="step in row.steps" :key="step.id" style="margin-bottom: 4px;">
-              <el-tag 
-                :type="getStepStatusType(step.step_status)" 
+            <div class="step-list">
+              <el-tag
+                v-for="step in row.steps"
+                :key="stepKey(row.id, step)"
+                :type="getStepStatusType(step.step_status)"
                 size="small"
-                effect="dark"
-                v-if="step.step_status !== 'pending'"
+                :effect="step.step_status === 'pending' ? 'plain' : 'dark'"
               >
-                {{ step.step_order }}. {{ getDeptName(step) }} {{ step.opinion ? '✓' : '' }}
-              </el-tag>
-              <el-tag type="warning" size="small" v-else effect="plain">
-                ⏳ {{ step.step_order }}. 待处理
+                {{ step.step_order }}. {{ getStepText(step) }}
               </el-tag>
             </div>
           </template>
         </el-table-column>
-        
-        <el-table-column label="创建时间" width="160">
+
+        <el-table-column label="创建时间" width="170">
           <template #default="{ row }">
             {{ formatDate(row.created_at) }}
           </template>
         </el-table-column>
-        
-        <el-table-column label="操作" width="150" fixed="right">
+
+        <el-table-column label="操作" width="210" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" size="small" @click="openDetail(row)">
-              查看详情
-            </el-button>
+            <el-button type="primary" size="small" @click="openDetail(row)">处理</el-button>
+            <el-button size="small" @click="loadDetail(row)">查看</el-button>
           </template>
         </el-table-column>
       </el-table>
 
-      <el-empty v-if="!approvals.length && !loading" description="暂无待办审批" />
+      <el-empty v-if="!filteredApprovals.length && !loading" description="暂无待办审批">
+        <el-button type="primary" plain @click="refresh">重新检查</el-button>
+      </el-empty>
     </el-card>
 
-    <!-- Detail Dialog -->
-    <el-dialog v-model="detailVisible" title="审批详情" width="700px">
-      <div v-if="currentInstance">
+    <el-dialog v-model="detailVisible" title="审批详情" width="760px">
+      <div v-if="currentInstance" class="detail-body">
         <el-descriptions :column="2" border>
           <el-descriptions-item label="节点">{{ currentInstance.node_type }}</el-descriptions-item>
-          <el-descriptions-item label="版本">{{ currentInstance.version }}</el-descriptions-item>
+          <el-descriptions-item label="版本">V{{ currentInstance.version }}</el-descriptions-item>
           <el-descriptions-item label="状态">
             <el-tag :type="getStatusType(currentInstance.status)">
               {{ getStatusText(currentInstance.status) }}
@@ -69,54 +97,156 @@
           <el-descriptions-item label="创建时间">{{ formatDate(currentInstance.created_at) }}</el-descriptions-item>
         </el-descriptions>
 
-        <h4 style="margin-top: 16px;">审批步骤</h4>
+        <h4>审批步骤</h4>
         <el-timeline>
           <el-timeline-item
             v-for="step in currentInstance.steps"
-            :key="step.id"
+            :key="stepKey(currentInstance.id, step)"
             :timestamp="step.completed_at ? formatTime(step.completed_at) : ''"
-            :type="getStepColor(step.step_status)"
+            :type="getTimelineType(step.step_status)"
           >
-            <p><strong>第{{ step.step_order }}步</strong> - {{ getDeptName(step) }}</p>
-            <p v-if="step.opinion" style="color: #666; margin-top: 4px;">{{ step.opinion }}</p>
-            <el-tag v-if="step.step_status === 'pending'" type="warning" size="small">等待处理</el-tag>
+            <div class="timeline-row">
+              <strong>第 {{ step.step_order }} 步</strong>
+              <el-tag :type="getStepStatusType(step.step_status)" size="small">
+                {{ getStepText(step) }}
+              </el-tag>
+            </div>
+            <div v-if="step.opinion" class="opinion">{{ step.opinion }}</div>
           </el-timeline-item>
         </el-timeline>
+
+        <el-form label-position="top">
+          <el-form-item label="审批意见">
+            <el-input
+              v-model="approvalOpinion"
+              type="textarea"
+              :rows="3"
+              maxlength="200"
+              show-word-limit
+              placeholder="填写审批意见，驳回时必填"
+            />
+          </el-form-item>
+        </el-form>
       </div>
+      <template #footer>
+        <el-button @click="detailVisible = false">关闭</el-button>
+        <el-button type="danger" :loading="actionLoading" @click="submitDecision('reject')">驳回</el-button>
+        <el-button type="primary" :loading="actionLoading" @click="submitDecision('approve')">通过</el-button>
+      </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { ElMessage } from 'element-plus'
+import { Refresh } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import { approvalApi } from '@/api'
-import type { ApprovalInstanceResponse } from '@/api'
+
+interface ApprovalStep {
+  id?: number
+  step_order: number
+  step_status: string
+  assignee_id?: number
+  opinion?: string
+  completed_at?: string | null
+}
+
+interface ApprovalInstance {
+  id: number
+  node_type: string
+  version: number
+  status: string
+  steps: ApprovalStep[]
+  created_at: string
+  completed_at?: string | null
+}
 
 const loading = ref(false)
-const approvals = ref<any[]>([])
+const actionLoading = ref(false)
+const approvals = ref<ApprovalInstance[]>([])
 const detailVisible = ref(false)
-const currentInstance = ref<any>(null)
+const currentInstance = ref<ApprovalInstance | null>(null)
+const approvalOpinion = ref('')
+const filters = reactive({
+  nodeType: '',
+  keyword: '',
+})
+
+const nodeOptions = computed(() => Array.from(new Set(approvals.value.map((item) => item.node_type))).sort())
+const nodeCount = computed(() => nodeOptions.value.length)
+const todayCount = computed(() => approvals.value.filter((item) => dayjs(item.created_at).isSame(dayjs(), 'day')).length)
+
+const filteredApprovals = computed(() => {
+  const keyword = filters.keyword.trim().toLowerCase()
+  return approvals.value.filter((item) => {
+    const matchNode = !filters.nodeType || item.node_type === filters.nodeType
+    const matchKeyword = !keyword || [
+      item.node_type,
+      `v${item.version}`,
+      ...item.steps.map((step) => `${step.step_order}${getStepText(step)}`),
+    ].some((text) => text.toLowerCase().includes(keyword))
+    return matchNode && matchKeyword
+  })
+})
 
 async function refresh() {
   loading.value = true
   try {
-    const data = await approvalApi.myPending()
-    approvals.value = data || []
+    approvals.value = ((await approvalApi.getMyPending()) as ApprovalInstance[]) || []
   } catch (e) {
-    console.error('Failed to load pending:', e)
+    console.error('Failed to load pending approvals:', e)
   } finally {
     loading.value = false
   }
 }
 
-function openDetail(instance: any) {
-  currentInstance.value = instance
-  detailVisible.value = true
+async function loadDetail(instance: ApprovalInstance) {
+  try {
+    currentInstance.value = (await approvalApi.getInstance(instance.id)) as ApprovalInstance
+    approvalOpinion.value = ''
+    detailVisible.value = true
+  } catch (e) {
+    console.error('Failed to load approval detail:', e)
+  }
 }
 
-function getStepStatusType(status: string): string {
-  const map: Record<string, string> = {
+function openDetail(instance: ApprovalInstance) {
+  loadDetail(instance)
+}
+
+async function submitDecision(action: 'approve' | 'reject') {
+  if (!currentInstance.value) return
+  if (action === 'reject' && !approvalOpinion.value.trim()) {
+    ElMessage.warning('驳回时请填写审批意见')
+    return
+  }
+
+  actionLoading.value = true
+  try {
+    if (action === 'approve') {
+      await approvalApi.approve(currentInstance.value.id, { opinion: approvalOpinion.value.trim() })
+      ElMessage.success('审批已通过')
+    } else {
+      await approvalApi.reject(currentInstance.value.id, { opinion: approvalOpinion.value.trim() })
+      ElMessage.success('审批已驳回')
+    }
+    detailVisible.value = false
+    await refresh()
+  } catch (e) {
+    console.error('Failed to submit approval decision:', e)
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+function stepKey(instanceId: number, step: ApprovalStep): string {
+  return `${instanceId}-${step.id || step.step_order}`
+}
+
+function getStepStatusType(status: string): '' | 'success' | 'warning' | 'danger' {
+  const map: Record<string, '' | 'success' | 'warning' | 'danger'> = {
     approved: 'success',
     rejected: 'danger',
     pending: 'warning',
@@ -124,36 +254,40 @@ function getStepStatusType(status: string): string {
   return map[status] || ''
 }
 
-function getDeptName(step: any): string {
-  // Simplified - in real app would fetch department name
-  return `步骤 ${step.step_order}`
+function getStepText(step: ApprovalStep): string {
+  const map: Record<string, string> = {
+    approved: '已通过',
+    rejected: '已驳回',
+    pending: '待处理',
+  }
+  return map[step.step_status] || step.step_status
 }
 
-function getStatusType(status: string): string {
-  const map: Record<string, string> = {
-    active: '',
+function getStatusType(status: string): '' | 'success' | 'warning' | 'danger' {
+  const map: Record<string, '' | 'success' | 'warning' | 'danger'> = {
+    active: 'warning',
     completed: 'success',
-    returned: 'warning',
+    returned: 'danger',
   }
   return map[status] || ''
 }
 
 function getStatusText(status: string): string {
   const map: Record<string, string> = {
-    active: '进行中',
+    active: '审批中',
     completed: '已完成',
-    returned: '已退回',
+    returned: '已驳回',
   }
   return map[status] || status
 }
 
-function getStepColor(status: string): string {
-  const map: Record<string, string> = {
-    approved: 'green',
-    rejected: 'red',
-    pending: 'orange',
+function getTimelineType(status: string): 'success' | 'warning' | 'danger' | 'primary' {
+  const map: Record<string, 'success' | 'warning' | 'danger' | 'primary'> = {
+    approved: 'success',
+    rejected: 'danger',
+    pending: 'warning',
   }
-  return map[status] || ''
+  return map[status] || 'primary'
 }
 
 function formatDate(dateStr: string): string {
@@ -164,15 +298,78 @@ function formatTime(dateStr: string): string {
   return dayjs(dateStr).format('MM-DD HH:mm')
 }
 
-onMounted(() => {
-  refresh()
-})
+onMounted(refresh)
 </script>
 
 <style scoped>
-.card-header {
+.pending-view {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.summary-label {
+  color: #606266;
+  font-size: 13px;
+}
+
+.summary-value {
+  margin-top: 8px;
+  color: #303133;
+  font-size: 28px;
+  font-weight: 600;
+}
+
+.card-header,
+.toolbar,
+.timeline-row {
+  display: flex;
   align-items: center;
+}
+
+.card-header {
+  justify-content: space-between;
+}
+
+.toolbar {
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.step-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.detail-body h4 {
+  margin: 18px 0 12px;
+}
+
+.timeline-row {
+  gap: 8px;
+}
+
+.opinion {
+  margin-top: 6px;
+  color: #606266;
+  line-height: 1.5;
+}
+
+@media (max-width: 900px) {
+  .summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
 }
 </style>

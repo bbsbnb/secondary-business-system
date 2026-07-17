@@ -218,6 +218,7 @@ class ConstructionContractUpdate(BaseModel):
     verified_amount: Optional[Decimal] = None
     consumption_amount: Optional[Decimal] = None
     material_settlement: Optional[Decimal] = None
+    cost_adjustment_summary: Optional[Decimal] = None
     over_budget_explanation: Optional[str] = None
 
 
@@ -225,10 +226,20 @@ class ConstructionContractResponse(BaseModel):
     id: int
     project_id: int
     month: str
+    original_contract_amount: Optional[Decimal] = None
+    visa_amount: Optional[Decimal] = None
+    claim_amount: Optional[Decimal] = None
+    change_amount: Optional[Decimal] = None
     total_revenue: Optional[Decimal] = None
+    verified_amount: Optional[Decimal] = None
+    consumption_amount: Optional[Decimal] = None
+    material_settlement: Optional[Decimal] = None
     total_cost: Optional[Decimal] = None
+    cost_adjustment_summary: Optional[Decimal] = None
+    profit_amount: Optional[Decimal] = None
     profit_ratio: Optional[Decimal] = None
     over_budget: bool
+    over_budget_explanation: Optional[str] = None
     over_budget_escalated: bool
     reviewed_at: Optional[datetime] = None
     archived: bool

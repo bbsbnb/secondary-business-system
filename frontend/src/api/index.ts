@@ -39,10 +39,11 @@ export const permissionApi = {
 
 // ========== 基线数据(M1) ==========
 export const baselineApi = {
-  get: (projectId: number) => api.get(`/baseline?project_id=${projectId}`),
-  create: (data: any) => api.post('/baseline', data),
+  get: (projectId: number) => api.get(`/baseline/${projectId}`),
+  create: (projectId: number, data: any) => api.post(`/baseline/${projectId}`, data),
   update: (id: number, data: any) => api.put(`/baseline/${id}`, data),
-  lock: (id: number) => api.post(`/baseline/${id}/lock`),
+  lock: (id: number, data?: any) => api.post(`/baseline/${id}/lock`, data || { confirmed: true }),
+  unlock: (id: number, data: any) => api.post(`/baseline/${id}/unlock`, data),
 }
 
 // ========== 业务表单 ==========
@@ -172,9 +173,9 @@ export const m13Api = {
 // ========== 建造合同(M24) ==========
 export const contractApi = {
   get: (projectId: number, month: string) => 
-    api.get(`/contracts?project_id=${projectId}&month=${month}`),
-  createOrUpdate: (data: any) => api.post('/contracts', data),
-  update: (id: number, data: any) => api.put(`/contracts/${id}`, data),
+    api.get(`/contracts/${projectId}/${month}`),
+  createOrUpdate: (projectId: number, month: string) => api.post(`/contracts/${projectId}/${month}`),
+  update: (projectId: number, month: string, data: any) => api.put(`/contracts/${projectId}/${month}`, data),
 }
 
 // ========== 模板管理 ==========
@@ -203,10 +204,18 @@ export const documentApi = {
 
 // ========== 预警中心 ==========
 export const alertApi = {
-  list: (params?: any) => api.get('/alerts', { params }),
+  list: (params?: any) => api.get('/alerts/list', { params }),
+  stats: (params?: any) => api.get('/alerts/stats', { params }),
   get: (id: number) => api.get(`/alerts/${id}`),
   resolve: (id: number) => api.post(`/alerts/${id}/resolve`),
   markAllRead: () => api.post('/alerts/mark-all-read'),
+  createManual: (data: any) => api.post('/alerts/create-manual', data),
+}
+
+// ========== 驾驶舱 ==========
+export const dashboardApi = {
+  getSummary: (params?: any) => api.get('/dashboard/dashboard', { params }),
+  getMonthlyTrend: (params?: any) => api.get('/dashboard/monthly-trend', { params }),
 }
 
 // ========== 移动端 ==========

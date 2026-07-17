@@ -70,7 +70,7 @@ export const useProjectStore = defineStore('project', () => {
   
   async function fetchProjects() {
     try {
-      projects.value = await projectApi.list('active')
+      projects.value = await projectApi.list({ status_filter: 'active' })
     } catch (e) {
       projects.value = []
     }

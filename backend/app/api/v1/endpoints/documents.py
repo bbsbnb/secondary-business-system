@@ -90,7 +90,7 @@ async def upload_document(
         file_path=file_path,
         file_type=ext.lstrip("."),
         file_size=len(content),
-        uploaded_by=current_user.id,
+        uploaded_by=None,
         related_node=related_node,
         related_form_id=related_form_id,
         auto_categorized=auto_categorized,
